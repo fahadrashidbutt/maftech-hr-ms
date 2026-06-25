@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
 const STATUSES = ['applied', 'shortlisted', 'interview_scheduled', 'hired', 'rejected'];
+const JOB_STATUSES = ['open', 'closed'];
 
 const statusLabel = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const statusClass = (s) => s === 'hired' ? 'approved' : s === 'rejected' ? 'rejected' : 'pending';
@@ -18,6 +19,15 @@ export default function Recruitment() {
   const [error, setError] = useState('');
   const [showJob, setShowJob] = useState(false);
   const [showCand, setShowCand] = useState(false);
+
+  // job filters
+  const [filterJobStatus, setFilterJobStatus] = useState('');
+  const [filterJobDept, setFilterJobDept] = useState('');
+  const [jobSearch, setJobSearch] = useState('');
+
+  // candidate filters
+  const [filterCandStatus, setFilterCandStatus] = useState('');
+  const [candSearch, setCandSearch] = useState('');
 
   const loadJobs = () => api.jobs().then((j) => {
     setJobs(j);
@@ -40,6 +50,25 @@ export default function Recruitment() {
     } catch (e) { setError(e.message); }
   };
 
+  // collect dept names from jobs for dept filter
+  const deptOptions = [...new Set(jobs.map((j) => j.department_name).filter(Boolean))];
+
+  const jsl = jobSearch.toLowerCase();
+  const filteredJobs = jobs
+    .filter((j) => !filterJobStatus || j.status === filterJobStatus)
+    .filter((j) => !filterJobDept || (j.department_name || '') === filterJobDept)
+    .filter((j) => !jsl || j.title.toLowerCase().includes(jsl));
+
+  const csl = candSearch.toLowerCase();
+  const filteredCands = candidates
+    .filter((c) => !filterCandStatus || c.status === filterCandStatus)
+    .filter((c) => !csl || c.full_name.toLowerCase().includes(csl) ||
+      (c.email || '').toLowerCase().includes(csl) ||
+      (c.job_title || '').toLowerCase().includes(csl));
+
+  const hasJobFilter = filterJobStatus || filterJobDept || jobSearch;
+  const hasCandFilter = filterCandStatus || candSearch;
+
   return (
     <>
       <div className="page-head">
@@ -54,24 +83,46 @@ export default function Recruitment() {
 
       <div className="card">
         <h2>Job openings</h2>
-        {jobs.length === 0 ? <div className="empty">No job openings yet.</div> : (
-          <table>
-            <thead><tr><th>Title</th><th>Department</th><th>Shift</th><th>Salary (PKR)</th><th>Candidates</th><th>Status</th></tr></thead>
-            <tbody>
-              {jobs.map((j) => (
-                <tr key={j.id} className="row-link"
-                  onClick={() => { setActive(j); setViewAll(false); }}
-                  style={!viewAll && active?.id === j.id ? { background: 'var(--teal-050)' } : null}>
-                  <td><strong>{j.title}</strong></td>
-                  <td>{j.department_name || '—'}</td>
-                  <td>{j.shift || '—'}</td>
-                  <td>{j.salary ? Number(j.salary).toLocaleString() : '—'}</td>
-                  <td>{j.candidate_count}</td>
-                  <td><span className={`tag ${j.status}`}>{j.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="filter-bar" style={{ padding: '0 18px', marginBottom: 12 }}>
+          <input placeholder="Search job title…" value={jobSearch}
+            onChange={(e) => setJobSearch(e.target.value)} />
+          <select value={filterJobStatus} onChange={(e) => setFilterJobStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            {JOB_STATUSES.map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+          </select>
+          {deptOptions.length > 0 && (
+            <select value={filterJobDept} onChange={(e) => setFilterJobDept(e.target.value)}>
+              <option value="">All departments</option>
+              {deptOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+          {hasJobFilter && (
+            <button className="reset" onClick={() => { setFilterJobStatus(''); setFilterJobDept(''); setJobSearch(''); }}>
+              Clear
+            </button>
+          )}
+        </div>
+        {filteredJobs.length === 0 ? <div className="empty">{hasJobFilter ? 'No job openings match these filters.' : 'No job openings yet.'}</div> : (
+          <>
+            {hasJobFilter && <div className="results-count">{filteredJobs.length} of {jobs.length} openings</div>}
+            <table>
+              <thead><tr><th>Title</th><th>Department</th><th>Shift</th><th>Salary (PKR)</th><th>Candidates</th><th>Status</th></tr></thead>
+              <tbody>
+                {filteredJobs.map((j) => (
+                  <tr key={j.id} className="row-link"
+                    onClick={() => { setActive(j); setViewAll(false); setFilterCandStatus(''); setCandSearch(''); }}
+                    style={!viewAll && active?.id === j.id ? { background: 'var(--teal-050)' } : null}>
+                    <td><strong>{j.title}</strong></td>
+                    <td>{j.department_name || '—'}</td>
+                    <td>{j.shift || '—'}</td>
+                    <td>{j.salary ? Number(j.salary).toLocaleString() : '—'}</td>
+                    <td>{j.candidate_count}</td>
+                    <td><span className={`tag ${j.status}`}>{j.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 
@@ -80,42 +131,56 @@ export default function Recruitment() {
           <span>
             {viewAll ? 'All candidates' : active ? `Candidates — ${active.title}` : 'Candidates'}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn ghost sm" onClick={() => { setViewAll(!viewAll); }}>
-              {viewAll ? 'Filter by job' : 'View all'}
-            </button>
-          </div>
+          <button className="btn ghost sm" onClick={() => { setViewAll(!viewAll); setFilterCandStatus(''); setCandSearch(''); }}>
+            {viewAll ? 'Filter by job' : 'View all'}
+          </button>
         </h2>
-        {candidates.length === 0 ? <div className="empty">No candidates found.</div> : (
-          <table>
-            <thead><tr>
-              <th>Name</th><th>Job opening</th><th>Contact</th><th>Resume</th><th>Status</th>
-            </tr></thead>
-            <tbody>
-              {candidates.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.full_name}</td>
-                  <td style={{ fontSize: 13, color: 'var(--text-2)' }}>{c.job_title}</td>
-                  <td>{c.email || '—'}</td>
-                  <td>
-                    {c.resume_stored
-                      ? <a className="btn ghost sm" href={`/api/recruitment/candidates/${c.id}/resume`}>Download</a>
-                      : '—'}
-                  </td>
-                  <td>
-                    {write ? (
-                      <select value={c.status} onChange={(e) => setStatus(c.id, e.target.value)}
-                        style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line)', fontSize: 13 }}>
-                        {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                      </select>
-                    ) : (
-                      <span className={`tag ${statusClass(c.status)}`}>{statusLabel(c.status)}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="filter-bar" style={{ padding: '0 18px', marginBottom: 12 }}>
+          <input placeholder="Search name, email, job…" value={candSearch}
+            onChange={(e) => setCandSearch(e.target.value)} />
+          <select value={filterCandStatus} onChange={(e) => setFilterCandStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+          </select>
+          {hasCandFilter && (
+            <button className="reset" onClick={() => { setFilterCandStatus(''); setCandSearch(''); }}>
+              Clear
+            </button>
+          )}
+        </div>
+        {filteredCands.length === 0 ? <div className="empty">{hasCandFilter ? 'No candidates match these filters.' : 'No candidates found.'}</div> : (
+          <>
+            {hasCandFilter && <div className="results-count">{filteredCands.length} of {candidates.length} candidates</div>}
+            <table>
+              <thead><tr>
+                <th>Name</th><th>Job opening</th><th>Contact</th><th>Resume</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+                {filteredCands.map((c) => (
+                  <tr key={c.id}>
+                    <td>{c.full_name}</td>
+                    <td style={{ fontSize: 13, color: 'var(--muted)' }}>{c.job_title}</td>
+                    <td>{c.email || '—'}</td>
+                    <td>
+                      {c.resume_stored
+                        ? <a className="btn ghost sm" href={`/api/recruitment/candidates/${c.id}/resume`}>Download</a>
+                        : '—'}
+                    </td>
+                    <td>
+                      {write ? (
+                        <select value={c.status} onChange={(e) => setStatus(c.id, e.target.value)}
+                          style={{ padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line)', fontSize: 13 }}>
+                          {STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+                        </select>
+                      ) : (
+                        <span className={`tag ${statusClass(c.status)}`}>{statusLabel(c.status)}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 
@@ -145,11 +210,7 @@ function JobForm({ onClose, onSaved }) {
   const save = async () => {
     setError('');
     try {
-      await api.createJob({
-        ...f,
-        department_id: f.department_id || null,
-        salary: f.salary ? Number(f.salary) : null,
-      });
+      await api.createJob({ ...f, department_id: f.department_id || null, salary: f.salary ? Number(f.salary) : null });
       onSaved();
     } catch (e) { setError(e.message); }
   };

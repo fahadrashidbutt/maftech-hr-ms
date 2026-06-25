@@ -4,16 +4,39 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
+const EMP_STATUSES = ['active', 'probation', 'on_leave', 'terminated', 'resigned'];
+
 export default function Employees() {
   const { can } = useAuth();
   const nav = useNavigate();
   const [rows, setRows] = useState([]);
-  const [q, setQ] = useState('');
+  const [depts, setDepts] = useState([]);
+  const [shifts, setShifts] = useState([]);
   const [error, setError] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
-  const load = (query = '') => api.employees(query).then(setRows).catch((e) => setError(e.message));
-  useEffect(() => { load(); }, []);
+  const [q, setQ] = useState('');
+  const [filterDept, setFilterDept] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterShift, setFilterShift] = useState('');
+
+  const load = () => api.employees('').then(setRows).catch((e) => setError(e.message));
+  useEffect(() => {
+    load();
+    api.departments().then(setDepts).catch(() => {});
+    api.shifts().then(setShifts).catch(() => {});
+  }, []);
+
+  const ql = q.toLowerCase();
+  const displayed = rows
+    .filter((e) => !ql || [e.full_name, e.employee_code, e.email, e.designation]
+      .some((v) => (v || '').toLowerCase().includes(ql)))
+    .filter((e) => !filterDept || (e.department_name || '') === filterDept)
+    .filter((e) => !filterStatus || e.employment_status === filterStatus)
+    .filter((e) => !filterShift || (e.shift || '') === filterShift);
+
+  const hasFilter = q || filterDept || filterStatus || filterShift;
+  const clearFilters = () => { setQ(''); setFilterDept(''); setFilterStatus(''); setFilterShift(''); };
 
   return (
     <>
@@ -24,36 +47,57 @@ export default function Employees() {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="toolbar">
-        <input placeholder="Search by name, code, email or designation…"
-          value={q} onChange={(e) => { setQ(e.target.value); load(e.target.value); }} />
+      <div className="filter-bar">
+        <input placeholder="Search name, code, email, designation…"
+          value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 2 }} />
+        <select value={filterDept} onChange={(e) => setFilterDept(e.target.value)}>
+          <option value="">All departments</option>
+          {depts.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+        </select>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+          <option value="">All statuses</option>
+          {EMP_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+        </select>
+        <select value={filterShift} onChange={(e) => setFilterShift(e.target.value)}>
+          <option value="">All shifts</option>
+          {shifts.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+        </select>
+        {hasFilter && <button className="reset" onClick={clearFilters}>Clear filters</button>}
       </div>
 
       <div className="card">
-        {rows.length === 0 ? <div className="empty">No employees found.</div> : (
-          <table>
-            <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Status</th></tr></thead>
-            <tbody>
-              {rows.map((e) => (
-                <tr key={e.id} className="row-link" onClick={() => nav(`/employees/${e.id}`)}>
-                  <td>{e.employee_code || '—'}</td>
-                  <td>{e.full_name}</td>
-                  <td>{e.department_name || '—'}</td>
-                  <td>{e.designation || '—'}</td>
-                  <td><span className="tag approved">{e.employment_status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {displayed.length === 0 ? (
+          <div className="empty">{hasFilter ? 'No employees match these filters.' : 'No employees found.'}</div>
+        ) : (
+          <>
+            <div className="results-count">{displayed.length} of {rows.length} employee{rows.length !== 1 ? 's' : ''}</div>
+            <table>
+              <thead>
+                <tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Shift</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {displayed.map((e) => (
+                  <tr key={e.id} className="row-link" onClick={() => nav(`/employees/${e.id}`)}>
+                    <td>{e.employee_code || '—'}</td>
+                    <td>{e.full_name}</td>
+                    <td>{e.department_name || '—'}</td>
+                    <td>{e.designation || '—'}</td>
+                    <td>{e.shift || '—'}</td>
+                    <td><span className="tag approved">{e.employment_status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 
-      {showAdd && <AddEmployee onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(q); }} />}
+      {showAdd && <AddEmployee onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
     </>
   );
 }
 
-const STATUSES = ['active', 'probation', 'on_leave', 'terminated', 'resigned'];
+const ADD_STATUSES = ['active', 'probation', 'on_leave', 'terminated', 'resigned'];
 
 function AddEmployee({ onClose, onSaved }) {
   const [f, setF] = useState({
@@ -123,7 +167,7 @@ function AddEmployee({ onClose, onSaved }) {
             <div className="field"><label>Salary (PKR)</label><input type="number" value={f.salary} onChange={set('salary')} /></div>
             <div className="field"><label>Employment status</label>
               <select value={f.employment_status} onChange={set('employment_status')}>
-                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                {ADD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="field"><label>Date of termination</label><input type="date" value={f.date_of_termination} onChange={set('date_of_termination')} /></div>
@@ -133,7 +177,6 @@ function AddEmployee({ onClose, onSaved }) {
               <textarea rows="2" value={f.termination_reason} onChange={set('termination_reason')} />
             </div>
           )}
-
           <div style={{ borderTop: '1px solid var(--line)', marginTop: 16, paddingTop: 14 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 600 }}>
               <input type="checkbox" checked={createAccount} onChange={(e) => setCreateAccount(e.target.checked)} />

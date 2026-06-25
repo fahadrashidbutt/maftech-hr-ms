@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './auth.jsx';
 import { NotificationProvider, useNotifications } from './notifications.jsx';
 import './styles.css';
 
+import { LayoutDashboard, Users, CalendarDays, Briefcase, Bell, Settings } from 'lucide-react';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Employees from './pages/Employees.jsx';
@@ -29,15 +30,15 @@ function Sidebar() {
         HR<span> MS</span>
       </div>
       <nav className="nav">
-        {showDash && <NavLink to="/" end>Dashboard</NavLink>}
-        <NavLink to="/employees">Employees</NavLink>
-        <NavLink to="/leave">Leave</NavLink>
-        {showRecruit && <NavLink to="/recruitment">Recruitment</NavLink>}
+        {showDash && <NavLink to="/" end><LayoutDashboard size={16} />Dashboard</NavLink>}
+        <NavLink to="/employees"><Users size={16} />Employees</NavLink>
+        <NavLink to="/leave"><CalendarDays size={16} />Leave</NavLink>
+        {showRecruit && <NavLink to="/recruitment"><Briefcase size={16} />Recruitment</NavLink>}
         <NavLink to="/notifications">
-          Notifications
+          <Bell size={16} />Notifications
           {unreadCount > 0 && <span className="badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
         </NavLink>
-        {showAdmin && <NavLink to="/admin">Admin</NavLink>}
+        {showAdmin && <NavLink to="/admin"><Settings size={16} />Admin</NavLink>}
       </nav>
       <div className="side-foot">
         <div className="who">{user.name}</div>

@@ -16,6 +16,12 @@ export default function Leave() {
   const [rejectTarget, setRejectTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
 
+  // filters
+  const [filterSearch, setFilterSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterPaid, setFilterPaid] = useState('');
+
   const load = () => api.leave().then(setRows).catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
 
@@ -26,6 +32,16 @@ export default function Leave() {
 
   const canEdit = can('leave.edit');
   const canApprove = can('leave.approve');
+
+  const sl = filterSearch.toLowerCase();
+  const displayed = rows
+    .filter((r) => !sl || (r.employee_name || '').toLowerCase().includes(sl))
+    .filter((r) => !filterStatus || r.status === filterStatus)
+    .filter((r) => !filterType || r.leave_type === filterType)
+    .filter((r) => !filterPaid || r.paid_status === filterPaid);
+
+  const hasFilter = filterSearch || filterStatus || filterType || filterPaid;
+  const clearFilters = () => { setFilterSearch(''); setFilterStatus(''); setFilterType(''); setFilterPaid(''); };
 
   return (
     <>
@@ -41,58 +57,84 @@ export default function Leave() {
 
       {error && <div className="error">{error}</div>}
 
+      <div className="filter-bar">
+        {canApprove && (
+          <input placeholder="Search employee name…"
+            value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} />
+        )}
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+          <option value="">All leave types</option>
+          {LEAVE_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+        </select>
+        <select value={filterPaid} onChange={(e) => setFilterPaid(e.target.value)}>
+          <option value="">Paid &amp; Unpaid</option>
+          <option value="paid">Paid only</option>
+          <option value="unpaid">Unpaid only</option>
+        </select>
+        {hasFilter && <button className="reset" onClick={clearFilters}>Clear filters</button>}
+      </div>
+
       <div className="card">
-        {rows.length === 0 ? <div className="empty">No leave requests yet.</div> : (
-          <table>
-            <thead>
-              <tr>
-                <th>Employee</th>
-                <th>Type</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Reason</th>
-                <th>Paid</th>
-                <th>Status</th>
-                <th>Rejection reason</th>
-                {(canApprove || canEdit) && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.employee_name}</td>
-                  <td style={{ textTransform: 'capitalize' }}>{r.leave_type}</td>
-                  <td>{r.start_date}</td>
-                  <td>{r.end_date}</td>
-                  <td>{r.reason || '—'}</td>
-                  <td>
-                    {r.paid_status ? (
-                      <span className={`tag ${r.paid_status === 'paid' ? 'approved' : 'pending'}`}>
-                        {r.paid_status}
-                      </span>
-                    ) : '—'}
-                  </td>
-                  <td><span className={`tag ${r.status}`}>{r.status}</span></td>
-                  <td style={{ color: 'var(--text-2)', fontSize: 13 }}>
-                    {r.rejection_reason || '—'}
-                  </td>
-                  {(canApprove || canEdit) && (
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {r.status === 'pending' && canApprove && (
-                        <>
-                          <button className="btn ok sm" onClick={() => approve(r.id)}>Approve</button>{' '}
-                          <button className="btn no sm" onClick={() => setRejectTarget(r)}>Reject</button>{' '}
-                        </>
-                      )}
-                      {canEdit && (
-                        <button className="btn ghost sm" onClick={() => setEditTarget(r)}>Edit</button>
-                      )}
-                    </td>
-                  )}
+        {displayed.length === 0 ? (
+          <div className="empty">{hasFilter ? 'No requests match these filters.' : 'No leave requests yet.'}</div>
+        ) : (
+          <>
+            <div className="results-count">{displayed.length} of {rows.length} request{rows.length !== 1 ? 's' : ''}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Type</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Reason</th>
+                  <th>Paid</th>
+                  <th>Status</th>
+                  <th>Rejection reason</th>
+                  {(canApprove || canEdit) && <th></th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {displayed.map((r) => (
+                  <tr key={r.id}>
+                    <td>{r.employee_name}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{r.leave_type}</td>
+                    <td>{r.start_date}</td>
+                    <td>{r.end_date}</td>
+                    <td>{r.reason || '—'}</td>
+                    <td>
+                      {r.paid_status ? (
+                        <span className={`tag ${r.paid_status === 'paid' ? 'approved' : 'pending'}`}>
+                          {r.paid_status}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td><span className={`tag ${r.status}`}>{r.status}</span></td>
+                    <td style={{ color: 'var(--muted)', fontSize: 13 }}>{r.rejection_reason || '—'}</td>
+                    {(canApprove || canEdit) && (
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {r.status === 'pending' && canApprove && (
+                          <>
+                            <button className="btn ok sm" onClick={() => approve(r.id)}>Approve</button>{' '}
+                            <button className="btn no sm" onClick={() => setRejectTarget(r)}>Reject</button>{' '}
+                          </>
+                        )}
+                        {canEdit && (
+                          <button className="btn ghost sm" onClick={() => setEditTarget(r)}>Edit</button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
 
@@ -132,7 +174,7 @@ function RejectModal({ row, onClose, onRejected, onError }) {
         <h3>Reject leave request</h3>
         <div className="body">
           {error && <div className="error">{error}</div>}
-          <p style={{ marginBottom: 12, color: 'var(--text-2)' }}>
+          <p style={{ marginBottom: 12, color: 'var(--muted)' }}>
             Rejecting <strong>{row.employee_name}</strong>'s{' '}
             <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span>{' '}
             leave ({row.start_date} to {row.end_date}).
@@ -173,7 +215,7 @@ function EditLeaveModal({ row, onClose, onSaved, onError }) {
         <h3>Edit leave</h3>
         <div className="body">
           {error && <div className="error">{error}</div>}
-          <p style={{ marginBottom: 12, color: 'var(--text-2)' }}>
+          <p style={{ marginBottom: 12, color: 'var(--muted)' }}>
             <strong>{row.employee_name}</strong> &middot;{' '}
             <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span>{' '}
             ({row.start_date} to {row.end_date})

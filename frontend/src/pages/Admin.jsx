@@ -1,10 +1,12 @@
 // src/pages/Admin.jsx
-// Admin panel: shifts (HR + super_admin), departments + users (super_admin only).
 import { useEffect, useState } from 'react';
+import { Clock, Building2, UserCog } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 
 const ROLES = ['super_admin', 'hr', 'manager', 'employee'];
+
+const TAB_ICONS = { shifts: Clock, departments: Building2, users: UserCog };
 
 export default function Admin() {
   const { user } = useAuth();
@@ -21,10 +23,16 @@ export default function Admin() {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-        {tabs.map((t) => (
-          <button key={t} className={`btn ${tab === t ? '' : 'ghost'}`}
-            style={{ textTransform: 'capitalize' }} onClick={() => setTab(t)}>{t}</button>
-        ))}
+        {tabs.map((t) => {
+          const Icon = TAB_ICONS[t];
+          return (
+            <button key={t} className={`btn ${tab === t ? '' : 'ghost'}`}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, textTransform: 'capitalize' }}
+              onClick={() => setTab(t)}>
+              <Icon size={14} />{t}
+            </button>
+          );
+        })}
       </div>
       {tab === 'shifts' && <Shifts />}
       {tab === 'departments' && isSuperAdmin && <Departments />}
@@ -36,6 +44,7 @@ export default function Admin() {
 function Shifts() {
   const [shifts, setShifts] = useState([]);
   const [name, setName] = useState('');
+  const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -56,23 +65,30 @@ function Shifts() {
     catch (e) { setError(e.message); }
   };
 
+  const sl = search.toLowerCase();
+  const displayed = shifts.filter((s) => !sl || s.name.toLowerCase().includes(sl));
+
   return (
     <div className="card">
       <h2>Work shifts</h2>
-      {error && <div className="error">{error}</div>}
-      {msg && <div style={{ color: 'var(--ok)', padding: '8px 0', fontSize: 14 }}>{msg}</div>}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, padding: '0 18px' }}>
-        <input placeholder="New shift name (e.g. Morning 9am-5pm)"
+      {error && <div className="error" style={{ margin: '0 18px 12px' }}>{error}</div>}
+      {msg && <div style={{ color: 'var(--ok)', padding: '0 18px 8px', fontSize: 14 }}>{msg}</div>}
+      <div style={{ display: 'flex', gap: 8, padding: '0 18px 14px' }}>
+        <input placeholder="New shift name (e.g. Morning 9am–5pm)"
           value={name} onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           style={{ flex: 1, padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 8 }} />
         <button className="btn" onClick={add}>Add shift</button>
       </div>
-      {shifts.length === 0 ? <div className="empty">No shifts defined yet.</div> : (
+      <div className="filter-bar" style={{ padding: '0 18px', marginBottom: 10 }}>
+        <input placeholder="Search shifts…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {search && <button className="reset" onClick={() => setSearch('')}>Clear</button>}
+      </div>
+      {displayed.length === 0 ? <div className="empty">{search ? 'No shifts match.' : 'No shifts defined yet.'}</div> : (
         <table>
           <thead><tr><th>Shift name</th><th>Created</th><th></th></tr></thead>
           <tbody>
-            {shifts.map((s) => (
+            {displayed.map((s) => (
               <tr key={s.id}>
                 <td>{s.name}</td>
                 <td style={{ color: 'var(--muted)', fontSize: 13 }}>{(s.created_at || '').slice(0, 10)}</td>
@@ -91,6 +107,7 @@ function Shifts() {
 function Departments() {
   const [depts, setDepts] = useState([]);
   const [name, setName] = useState('');
+  const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
 
@@ -111,25 +128,33 @@ function Departments() {
     catch (e) { setError(e.message); }
   };
 
+  const sl = search.toLowerCase();
+  const displayed = depts.filter((d) => !sl || d.name.toLowerCase().includes(sl));
+
   return (
     <div className="card">
       <h2>Departments</h2>
-      {error && <div className="error">{error}</div>}
-      {msg && <div style={{ color: 'var(--ok)', padding: '8px 0', fontSize: 14 }}>{msg}</div>}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      {error && <div className="error" style={{ margin: '0 18px 12px' }}>{error}</div>}
+      {msg && <div style={{ color: 'var(--ok)', padding: '0 18px 8px', fontSize: 14 }}>{msg}</div>}
+      <div style={{ display: 'flex', gap: 8, padding: '0 18px 14px' }}>
         <input placeholder="New department name" value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
-          style={{ flex: 1 }} />
+          style={{ flex: 1, padding: '9px 11px', border: '1px solid var(--line)', borderRadius: 8 }} />
         <button className="btn" onClick={add}>Add</button>
       </div>
-      {depts.length === 0 ? <div className="empty">No departments yet.</div> : (
+      <div className="filter-bar" style={{ padding: '0 18px', marginBottom: 10 }}>
+        <input placeholder="Search departments…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {search && <button className="reset" onClick={() => setSearch('')}>Clear</button>}
+      </div>
+      {displayed.length === 0 ? <div className="empty">{search ? 'No departments match.' : 'No departments yet.'}</div> : (
         <table>
-          <thead><tr><th>Name</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Created</th><th></th></tr></thead>
           <tbody>
-            {depts.map((d) => (
+            {displayed.map((d) => (
               <tr key={d.id}>
                 <td>{d.name}</td>
+                <td style={{ color: 'var(--muted)', fontSize: 13 }}>{(d.created_at || '').slice(0, 10)}</td>
                 <td style={{ textAlign: 'right' }}>
                   <button className="btn no sm" onClick={() => remove(d)}>Delete</button>
                 </td>
@@ -148,6 +173,11 @@ function Users() {
   const [msg, setMsg] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState(null);
+
+  // filters
+  const [search, setSearch] = useState('');
+  const [filterRole, setFilterRole] = useState('');
+  const [filterActive, setFilterActive] = useState('');
 
   const load = () => api.adminUsers().then(setUsers).catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
@@ -168,35 +198,70 @@ function Users() {
     catch (e) { setError(e.message); }
   };
 
+  const sl = search.toLowerCase();
+  const displayed = users
+    .filter((u) => !sl || u.email.toLowerCase().includes(sl) || (u.full_name || '').toLowerCase().includes(sl))
+    .filter((u) => !filterRole || u.role === filterRole)
+    .filter((u) => {
+      if (filterActive === 'active') return u.is_active;
+      if (filterActive === 'inactive') return !u.is_active;
+      return true;
+    });
+
+  const hasFilter = search || filterRole || filterActive;
+
   return (
     <div className="card">
       <h2 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         User accounts
         <button className="btn sm" onClick={() => setShowAdd(true)}>Create user</button>
       </h2>
-      {error && <div className="error">{error}</div>}
-      {msg && <div style={{ color: 'var(--ok)', padding: '8px 0', fontSize: 14 }}>{msg}</div>}
-      {users.length === 0 ? <div className="empty">No users found.</div> : (
-        <table>
-          <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>{u.email}</td>
-                <td>{u.full_name || '—'}</td>
-                <td><span className="tag approved" style={{ textTransform: 'capitalize' }}>{u.role.replace('_', ' ')}</span></td>
-                <td><span className={`tag ${u.is_active ? 'approved' : 'rejected'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <button className="btn ghost sm" onClick={() => setEditUser(u)}>Edit</button>{' '}
-                  <button className="btn ghost sm" onClick={() => toggleActive(u)}>
-                    {u.is_active ? 'Deactivate' : 'Activate'}
-                  </button>{' '}
-                  <button className="btn no sm" onClick={() => remove(u)}>Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {error && <div className="error" style={{ margin: '0 18px 12px' }}>{error}</div>}
+      {msg && <div style={{ color: 'var(--ok)', padding: '0 18px 8px', fontSize: 14 }}>{msg}</div>}
+      <div className="filter-bar" style={{ padding: '0 18px', marginBottom: 12 }}>
+        <input placeholder="Search email or name…" value={search}
+          onChange={(e) => setSearch(e.target.value)} />
+        <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)}>
+          <option value="">All roles</option>
+          {ROLES.map((r) => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+        </select>
+        <select value={filterActive} onChange={(e) => setFilterActive(e.target.value)}>
+          <option value="">Active &amp; Inactive</option>
+          <option value="active">Active only</option>
+          <option value="inactive">Inactive only</option>
+        </select>
+        {hasFilter && (
+          <button className="reset" onClick={() => { setSearch(''); setFilterRole(''); setFilterActive(''); }}>
+            Clear filters
+          </button>
+        )}
+      </div>
+      {displayed.length === 0 ? (
+        <div className="empty">{hasFilter ? 'No users match these filters.' : 'No users found.'}</div>
+      ) : (
+        <>
+          {hasFilter && <div className="results-count">{displayed.length} of {users.length} users</div>}
+          <table>
+            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {displayed.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.email}</td>
+                  <td>{u.full_name || '—'}</td>
+                  <td><span className="tag approved" style={{ textTransform: 'capitalize' }}>{u.role.replace('_', ' ')}</span></td>
+                  <td><span className={`tag ${u.is_active ? 'approved' : 'rejected'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button className="btn ghost sm" onClick={() => setEditUser(u)}>Edit</button>{' '}
+                    <button className="btn ghost sm" onClick={() => toggleActive(u)}>
+                      {u.is_active ? 'Deactivate' : 'Activate'}
+                    </button>{' '}
+                    <button className="btn no sm" onClick={() => remove(u)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
       {showAdd && <CreateUserModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
       {editUser && <EditUserModal user={editUser} onClose={() => setEditUser(null)} onSaved={() => { setEditUser(null); load(); }} />}
