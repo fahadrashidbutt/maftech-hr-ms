@@ -8,17 +8,16 @@ const LEAVE_TYPES = [
   { v: 'sick', l: 'Sick' }, { v: 'unpaid', l: 'Unpaid' },
 ];
 
-// Status display config for HR / Manager
 const STATUS_CFG = {
-  pending:           { label: 'Pending',            cls: 'pending'  },
-  sent_to_manager:   { label: 'Awaiting Manager',   cls: 'pending'  },
-  manager_approved:  { label: 'Mgr. Approved',      cls: 'hired'    },
-  manager_rejected:  { label: 'Mgr. Rejected',      cls: 'rejected' },
-  approved:          { label: 'Approved',            cls: 'approved' },
-  rejected:          { label: 'Rejected',            cls: 'rejected' },
+  pending:           { label: 'Pending',          cls: 'pending'  },
+  sent_to_manager:   { label: 'Awaiting Manager', cls: 'pending'  },
+  manager_approved:  { label: 'Mgr. Approved',    cls: 'hired'    },
+  manager_rejected:  { label: 'Mgr. Rejected',    cls: 'rejected' },
+  approved:          { label: 'Approved',          cls: 'approved' },
+  rejected:          { label: 'Rejected',          cls: 'rejected' },
 };
 
-// Simplified status display for employees (hide internal workflow)
+// Employees see simplified statuses — internal workflow is hidden
 const EMP_STATUS_CFG = {
   pending:           { label: 'Pending',      cls: 'pending'  },
   sent_to_manager:   { label: 'Under Review', cls: 'pending'  },
@@ -27,6 +26,13 @@ const EMP_STATUS_CFG = {
   approved:          { label: 'Approved',     cls: 'approved' },
   rejected:          { label: 'Rejected',     cls: 'rejected' },
 };
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(d) {
+  if (!d) return '—';
+  const [y, m, day] = d.split('-');
+  return `${+day} ${MONTHS[+m - 1]} ${y}`;
+}
 
 export default function Leave() {
   const { can, user } = useAuth();
@@ -37,11 +43,12 @@ export default function Leave() {
 
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
-  const [showForm, setShowForm]       = useState(false);
-  const [rejectTarget, setRejectTarget]   = useState(null);
-  const [editTarget, setEditTarget]       = useState(null);
-  const [sendTarget, setSendTarget]       = useState(null);
-  const [reviewTarget, setReviewTarget]   = useState(null);
+
+  const [showForm,     setShowForm]     = useState(false);
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [editTarget,   setEditTarget]   = useState(null);
+  const [sendTarget,   setSendTarget]   = useState(null);
+  const [reviewTarget, setReviewTarget] = useState(null);
 
   // filters
   const [filterSearch, setFilterSearch] = useState('');
@@ -57,57 +64,26 @@ export default function Leave() {
     catch (e) { setError(e.message); }
   };
 
-  // ── Filtering ──────────────────────────────────────────────────────────────
   const sl = filterSearch.toLowerCase();
   const displayed = rows
     .filter((r) => !sl || (r.employee_name || '').toLowerCase().includes(sl))
     .filter((r) => {
       if (!filterStatus) return true;
       if (isEmployee && filterStatus === 'under_review')
-        return ['sent_to_manager', 'manager_approved', 'manager_rejected'].includes(r.status);
+        return ['sent_to_manager','manager_approved','manager_rejected'].includes(r.status);
       return r.status === filterStatus;
     })
     .filter((r) => !filterType || r.leave_type === filterType)
     .filter((r) => !filterPaid || r.paid_status === filterPaid);
 
   const hasFilter = filterSearch || filterStatus || filterType || filterPaid;
-  const clearFilters = () => { setFilterSearch(''); setFilterStatus(''); setFilterType(''); setFilterPaid(''); };
+  const clearFilters = () => {
+    setFilterSearch(''); setFilterStatus(''); setFilterType(''); setFilterPaid('');
+  };
 
   const statusDisplay = (r) => {
     const cfg = isEmployee ? EMP_STATUS_CFG : STATUS_CFG;
     return cfg[r.status] || { label: r.status, cls: 'pending' };
-  };
-
-  // ── Action buttons ─────────────────────────────────────────────────────────
-  const renderActions = (r) => {
-    if (isHR) {
-      return (
-        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-          {r.status === 'pending' && (
-            <>
-              <button className="btn ghost sm" onClick={() => setSendTarget(r)}>Send to Manager</button>{' '}
-              <button className="btn ok sm" onClick={() => approve(r.id)}>Approve</button>{' '}
-              <button className="btn no sm" onClick={() => setRejectTarget(r)}>Reject</button>{' '}
-            </>
-          )}
-          {(r.status === 'manager_approved' || r.status === 'manager_rejected') && (
-            <>
-              <button className="btn ok sm" onClick={() => approve(r.id)}>Final Approve</button>{' '}
-              <button className="btn no sm" onClick={() => setRejectTarget(r)}>Final Reject</button>{' '}
-            </>
-          )}
-          {canEdit && <button className="btn ghost sm" onClick={() => setEditTarget(r)}>Edit</button>}
-        </td>
-      );
-    }
-    if (isManager && r.status === 'sent_to_manager') {
-      return (
-        <td style={{ textAlign: 'right' }}>
-          <button className="btn sm" onClick={() => setReviewTarget(r)}>Review</button>
-        </td>
-      );
-    }
-    return <td />;
   };
 
   return (
@@ -116,7 +92,7 @@ export default function Leave() {
         <div>
           <h1>Leave</h1>
           <p>
-            {isHR     ? 'Review requests, consult managers, and make final decisions.'
+            {isHR      ? 'Review requests, consult managers, and make final decisions.'
             : isManager ? 'Review leave requests assigned to you by HR.'
             : 'Submit and track your leave requests.'}
           </p>
@@ -130,8 +106,9 @@ export default function Leave() {
 
       <div className="filter-bar">
         {!isEmployee && (
-          <input placeholder="Search employee name…"
-            value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} />
+          <input placeholder="Search employee…" value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            style={{ maxWidth: 220 }} />
         )}
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
           <option value="">All statuses</option>
@@ -149,100 +126,149 @@ export default function Leave() {
           )}
         </select>
         <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-          <option value="">All leave types</option>
+          <option value="">All types</option>
           {LEAVE_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
         </select>
         <select value={filterPaid} onChange={(e) => setFilterPaid(e.target.value)}>
           <option value="">Paid &amp; Unpaid</option>
-          <option value="paid">Paid only</option>
-          <option value="unpaid">Unpaid only</option>
+          <option value="paid">Paid</option>
+          <option value="unpaid">Unpaid</option>
         </select>
-        {hasFilter && <button className="reset" onClick={clearFilters}>Clear filters</button>}
+        {hasFilter && <button className="reset" onClick={clearFilters}>Clear</button>}
       </div>
 
       <div className="card">
         {displayed.length === 0 ? (
           <div className="empty">
-            {hasFilter ? 'No requests match these filters.'
-              : isManager ? 'No leave requests are pending your review.'
-              : 'No leave requests yet.'}
+            {hasFilter   ? 'No requests match these filters.'
+            : isManager  ? 'No leave requests pending your review.'
+            : 'No leave requests yet.'}
           </div>
         ) : (
           <>
-            <div className="results-count">{displayed.length} of {rows.length} request{rows.length !== 1 ? 's' : ''}</div>
-            <table>
-              <thead>
-                <tr>
-                  {!isEmployee && <th>Employee</th>}
-                  <th>Type</th><th>From</th><th>To</th><th>Reason</th><th>Paid</th>
-                  <th>Status</th>
-                  {isHR && <th>Manager Input</th>}
-                  {isManager && <th>HR Note</th>}
-                  {!isManager && <th>Rejection Reason</th>}
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayed.map((r) => {
-                  const sd = statusDisplay(r);
-                  return (
-                    <tr key={r.id}>
-                      {!isEmployee && <td>{r.employee_name}</td>}
-                      <td style={{ textTransform: 'capitalize' }}>{r.leave_type}</td>
-                      <td>{r.start_date}</td>
-                      <td>{r.end_date}</td>
-                      <td>{r.reason || '—'}</td>
-                      <td>
-                        {r.paid_status
-                          ? <span className={`tag ${r.paid_status === 'paid' ? 'approved' : 'pending'}`}>{r.paid_status}</span>
-                          : '—'}
-                      </td>
-                      <td><span className={`tag ${sd.cls}`}>{sd.label}</span></td>
+            <div className="results-count">
+              {displayed.length} of {rows.length} request{rows.length !== 1 ? 's' : ''}
+            </div>
 
-                      {/* HR sees manager's name + their recommendation */}
-                      {isHR && (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    {!isEmployee && <th>Employee</th>}
+                    <th>Type</th>
+                    <th>Period</th>
+                    <th>Paid</th>
+                    <th>Status</th>
+                    {isHR      && <th>Manager</th>}
+                    {isManager && <th>HR Note</th>}
+                    {!isManager && <th>Rejection note</th>}
+                    <th style={{ width: 1 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayed.map((r) => {
+                    const sd = statusDisplay(r);
+                    return (
+                      <tr key={r.id}>
+                        {!isEmployee && (
+                          <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{r.employee_name}</td>
+                        )}
+
+                        {/* Type + reason sub-line */}
                         <td>
-                          {r.assigned_manager_name ? (
-                            <div style={{ fontSize: 13 }}>
-                              <div style={{ color: 'var(--muted)', marginBottom: 3 }}>
-                                {r.status === 'sent_to_manager'
-                                  ? `Awaiting ${r.assigned_manager_name}`
-                                  : r.assigned_manager_name}
-                              </div>
-                              {(r.status === 'manager_approved' || r.status === 'manager_rejected') && (
-                                <>
-                                  <span className={`tag ${r.status === 'manager_approved' ? 'approved' : 'rejected'}`}
-                                    style={{ fontSize: 11 }}>
-                                    {r.status === 'manager_approved' ? 'Recommends Approve' : 'Recommends Reject'}
-                                  </span>
-                                  {r.manager_comment && (
-                                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, fontStyle: 'italic' }}>
-                                      "{r.manager_comment}"
-                                    </div>
-                                  )}
-                                </>
-                              )}
+                          <span style={{ textTransform: 'capitalize' }}>{r.leave_type}</span>
+                          {r.reason && (
+                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.reason}
                             </div>
-                          ) : '—'}
+                          )}
                         </td>
-                      )}
 
-                      {/* Manager sees HR's note */}
-                      {isManager && (
-                        <td style={{ fontSize: 13, color: 'var(--muted)' }}>{r.hr_comment || '—'}</td>
-                      )}
+                        {/* Merged From / To */}
+                        <td style={{ whiteSpace: 'nowrap', fontSize: 12.5 }}>
+                          {fmtDate(r.start_date)}
+                          <br />
+                          <span style={{ color: 'var(--muted)' }}>{fmtDate(r.end_date)}</span>
+                        </td>
 
-                      {/* Rejection reason for HR + Employee */}
-                      {!isManager && (
-                        <td style={{ fontSize: 13, color: 'var(--muted)' }}>{r.rejection_reason || '—'}</td>
-                      )}
+                        <td>
+                          {r.paid_status
+                            ? <span className={`tag ${r.paid_status}`}>{r.paid_status}</span>
+                            : <span style={{ color: 'var(--muted)' }}>—</span>}
+                        </td>
 
-                      {renderActions(r)}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        <td><span className={`tag ${sd.cls}`}>{sd.label}</span></td>
+
+                        {/* HR: manager name + their recommendation */}
+                        {isHR && (
+                          <td className="mgr-cell">
+                            {r.assigned_manager_name ? (
+                              <>
+                                <div className="mgr-name">{r.assigned_manager_name}</div>
+                                {(r.status === 'manager_approved' || r.status === 'manager_rejected') && (
+                                  <>
+                                    <span className={`tag ${r.status === 'manager_approved' ? 'approved' : 'rejected'}`}
+                                      style={{ fontSize: 11 }}>
+                                      {r.status === 'manager_approved' ? '✓ Approve' : '✗ Reject'}
+                                    </span>
+                                    {r.manager_comment && (
+                                      <div className="mgr-quote" title={r.manager_comment}>
+                                        "{r.manager_comment}"
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </>
+                            ) : <span style={{ color: 'var(--muted)' }}>—</span>}
+                          </td>
+                        )}
+
+                        {/* Manager: HR's note */}
+                        {isManager && (
+                          <td style={{ fontSize: 12.5, color: 'var(--muted)', maxWidth: 180 }}>
+                            {r.hr_comment || '—'}
+                          </td>
+                        )}
+
+                        {/* HR + Employee: rejection reason */}
+                        {!isManager && (
+                          <td style={{ fontSize: 12.5, color: 'var(--muted)', maxWidth: 180 }}>
+                            {r.rejection_reason || '—'}
+                          </td>
+                        )}
+
+                        {/* Action buttons */}
+                        <td>
+                          <div className="actions">
+                            {isHR && r.status === 'pending' && (
+                              <>
+                                <button className="btn ghost sm" onClick={() => setSendTarget(r)}>
+                                  → Manager
+                                </button>
+                                <button className="btn ok sm" onClick={() => approve(r.id)}>Approve</button>
+                                <button className="btn no sm" onClick={() => setRejectTarget(r)}>Reject</button>
+                              </>
+                            )}
+                            {isHR && (r.status === 'manager_approved' || r.status === 'manager_rejected') && (
+                              <>
+                                <button className="btn ok sm" onClick={() => approve(r.id)}>Approve</button>
+                                <button className="btn no sm" onClick={() => setRejectTarget(r)}>Reject</button>
+                              </>
+                            )}
+                            {isHR && canEdit && (
+                              <button className="btn ghost sm" onClick={() => setEditTarget(r)}>Edit</button>
+                            )}
+                            {isManager && r.status === 'sent_to_manager' && (
+                              <button className="btn sm" onClick={() => setReviewTarget(r)}>Review</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>
@@ -283,8 +309,8 @@ export default function Leave() {
 function SendToManagerModal({ row, onClose, onSent, onError }) {
   const [managers, setManagers] = useState([]);
   const [managerId, setManagerId] = useState('');
-  const [comment, setComment] = useState('');
-  const [error, setError] = useState('');
+  const [comment,   setComment]   = useState('');
+  const [error,     setError]     = useState('');
 
   useEffect(() => { api.leaveManagers().then(setManagers).catch(() => {}); }, []);
 
@@ -303,8 +329,8 @@ function SendToManagerModal({ row, onClose, onSent, onError }) {
           {error && <div className="error">{error}</div>}
           <p style={{ marginBottom: 14, color: 'var(--muted)', fontSize: 13 }}>
             <strong>{row.employee_name}</strong> &mdash;{' '}
-            <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span>{' '}
-            leave &nbsp;({row.start_date} &rarr; {row.end_date})
+            <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span> leave &nbsp;
+            ({fmtDate(row.start_date)} → {fmtDate(row.end_date)})
           </p>
           <div className="field">
             <label>Select manager *</label>
@@ -319,9 +345,8 @@ function SendToManagerModal({ row, onClose, onSent, onError }) {
           </div>
           <div className="field">
             <label>Note to manager (optional)</label>
-            <textarea rows="3" value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Any context or instructions for the manager..." />
+            <textarea rows="3" value={comment} onChange={(e) => setComment(e.target.value)}
+              placeholder="Any context or instructions for the manager…" />
           </div>
         </div>
         <div className="foot">
@@ -333,11 +358,11 @@ function SendToManagerModal({ row, onClose, onSent, onError }) {
   );
 }
 
-// ── Manager submits their recommendation ──────────────────────────────────────
+// ── Manager submits their recommendation ─────────────────────────────────────
 function ManagerReviewModal({ row, onClose, onReviewed, onError }) {
   const [decision, setDecision] = useState('approved');
-  const [comment, setComment] = useState('');
-  const [error, setError] = useState('');
+  const [comment,  setComment]  = useState('');
+  const [error,    setError]    = useState('');
 
   const submit = async () => {
     setError('');
@@ -353,33 +378,32 @@ function ManagerReviewModal({ row, onClose, onReviewed, onError }) {
           {error && <div className="error">{error}</div>}
           <p style={{ marginBottom: 14, color: 'var(--muted)', fontSize: 13 }}>
             <strong>{row.employee_name}</strong> &mdash;{' '}
-            <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span>{' '}
-            leave &nbsp;({row.start_date} &rarr; {row.end_date})
+            <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span> leave &nbsp;
+            ({fmtDate(row.start_date)} → {fmtDate(row.end_date)})
           </p>
           {row.hr_comment && (
             <div style={{ background: 'var(--teal-050)', border: '1px solid var(--line)', padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
               <strong style={{ color: 'var(--teal-700)' }}>Note from HR:</strong>{' '}
-              <span style={{ color: 'var(--ink)' }}>{row.hr_comment}</span>
+              {row.hr_comment}
             </div>
           )}
           <div className="field">
             <label>Your recommendation *</label>
             <select value={decision} onChange={(e) => setDecision(e.target.value)}>
-              <option value="approved">Recommend Approval — work is covered / no issues</option>
-              <option value="rejected">Recommend Rejection — team capacity concern</option>
+              <option value="approved">Recommend Approval — work is covered</option>
+              <option value="rejected">Recommend Rejection — capacity concern</option>
             </select>
           </div>
           <div className="field">
             <label>Comment for HR (optional)</label>
-            <textarea rows="3" value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              placeholder="Explain your recommendation to help HR make the final call..." />
+            <textarea rows="3" value={comment} onChange={(e) => setComment(e.target.value)}
+              placeholder="Help HR make the final call…" />
           </div>
         </div>
         <div className="foot">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
           <button className={`btn ${decision === 'approved' ? 'ok' : 'no'}`} onClick={submit}>
-            {decision === 'approved' ? 'Submit — Recommend Approval' : 'Submit — Recommend Rejection'}
+            {decision === 'approved' ? 'Recommend Approval' : 'Recommend Rejection'}
           </button>
         </div>
       </div>
@@ -387,10 +411,10 @@ function ManagerReviewModal({ row, onClose, onReviewed, onError }) {
   );
 }
 
-// ── HR final rejection with reason ────────────────────────────────────────────
+// ── HR rejects with reason ────────────────────────────────────────────────────
 function RejectModal({ row, onClose, onRejected, onError }) {
   const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
+  const [error,  setError]  = useState('');
 
   const confirm = async () => {
     setError('');
@@ -401,48 +425,45 @@ function RejectModal({ row, onClose, onRejected, onError }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Reject Leave Request</h3>
+        <h3>Reject Leave</h3>
         <div className="body">
           {error && <div className="error">{error}</div>}
           <p style={{ marginBottom: 12, color: 'var(--muted)' }}>
             Rejecting <strong>{row.employee_name}</strong>'s{' '}
             <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span>{' '}
-            leave ({row.start_date} to {row.end_date}).
+            leave ({fmtDate(row.start_date)} → {fmtDate(row.end_date)}).
           </p>
           {row.manager_comment && (
             <div style={{ background: '#fbe6e4', border: '1px solid #f0cfcc', padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
-              <strong>Manager comment:</strong> {row.manager_comment}
+              <strong>Manager's comment:</strong> {row.manager_comment}
             </div>
           )}
           <div className="field">
-            <label>Rejection reason (optional)</label>
-            <textarea rows="3" value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="This will be visible to the employee..." />
+            <label>Reason (optional — visible to the employee)</label>
+            <textarea rows="3" value={reason} onChange={(e) => setReason(e.target.value)}
+              placeholder="Explain the reason…" />
           </div>
         </div>
         <div className="foot">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn no" onClick={confirm}>Reject Leave</button>
+          <button className="btn no" onClick={confirm}>Confirm Rejection</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ── HR edit modal (override any field) ───────────────────────────────────────
+// ── HR edit modal ─────────────────────────────────────────────────────────────
 function EditLeaveModal({ row, onClose, onSaved, onError }) {
-  const [status, setStatus]       = useState(row.status);
+  const [status,     setStatus]     = useState(row.status);
   const [paidStatus, setPaidStatus] = useState(row.paid_status || 'paid');
-  const [reason, setReason]       = useState(row.rejection_reason || '');
-  const [error, setError]         = useState('');
+  const [reason,     setReason]     = useState(row.rejection_reason || '');
+  const [error,      setError]      = useState('');
 
   const save = async () => {
     setError('');
-    try {
-      await api.editLeaveStatus(row.id, status, reason, paidStatus);
-      onSaved();
-    } catch (e) { setError(e.message); onError(e.message); }
+    try { await api.editLeaveStatus(row.id, status, reason, paidStatus); onSaved(); }
+    catch (e) { setError(e.message); onError(e.message); }
   };
 
   return (
@@ -454,17 +475,19 @@ function EditLeaveModal({ row, onClose, onSaved, onError }) {
           <p style={{ marginBottom: 12, color: 'var(--muted)' }}>
             <strong>{row.employee_name}</strong> &middot;{' '}
             <span style={{ textTransform: 'capitalize' }}>{row.leave_type}</span>{' '}
-            ({row.start_date} to {row.end_date})
+            ({fmtDate(row.start_date)} → {fmtDate(row.end_date)})
           </p>
           <div className="grid-2">
-            <div className="field"><label>Status</label>
+            <div className="field">
+              <label>Status</label>
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
                 {Object.entries(STATUS_CFG).map(([v, c]) => (
                   <option key={v} value={v}>{c.label}</option>
                 ))}
               </select>
             </div>
-            <div className="field"><label>Paid status</label>
+            <div className="field">
+              <label>Paid / Unpaid</label>
               <select value={paidStatus} onChange={(e) => setPaidStatus(e.target.value)}>
                 <option value="paid">Paid</option>
                 <option value="unpaid">Unpaid</option>
@@ -473,10 +496,8 @@ function EditLeaveModal({ row, onClose, onSaved, onError }) {
           </div>
           {status === 'rejected' && (
             <div className="field">
-              <label>Rejection reason (optional)</label>
-              <textarea rows="3" value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Explain the reason for rejection..." />
+              <label>Rejection reason</label>
+              <textarea rows="3" value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
           )}
         </div>
@@ -489,7 +510,7 @@ function EditLeaveModal({ row, onClose, onSaved, onError }) {
   );
 }
 
-// ── Employee submit form ──────────────────────────────────────────────────────
+// ── Employee leave request form ───────────────────────────────────────────────
 function LeaveForm({ onClose, onSaved }) {
   const [f, setF] = useState({
     leave_type: 'annual', start_date: '', end_date: '',
@@ -500,6 +521,7 @@ function LeaveForm({ onClose, onSaved }) {
 
   const save = async () => {
     setError('');
+    if (!f.start_date || !f.end_date) return setError('Start and end date are required.');
     try { await api.submitLeave(f); onSaved(); }
     catch (e) { setError(e.message); }
   };
@@ -511,25 +533,30 @@ function LeaveForm({ onClose, onSaved }) {
         <div className="body">
           {error && <div className="error">{error}</div>}
           <div className="grid-2">
-            <div className="field"><label>Leave type</label>
+            <div className="field">
+              <label>Leave type</label>
               <select value={f.leave_type} onChange={set('leave_type')}>
                 {LEAVE_TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
               </select>
             </div>
-            <div className="field"><label>Paid / Unpaid</label>
+            <div className="field">
+              <label>Paid / Unpaid</label>
               <select value={f.paid_status} onChange={set('paid_status')}>
                 <option value="paid">Paid</option>
                 <option value="unpaid">Unpaid</option>
               </select>
             </div>
-            <div className="field"><label>From</label>
+            <div className="field">
+              <label>From *</label>
               <input type="date" value={f.start_date} onChange={set('start_date')} />
             </div>
-            <div className="field"><label>To</label>
+            <div className="field">
+              <label>To *</label>
               <input type="date" value={f.end_date} onChange={set('end_date')} />
             </div>
           </div>
-          <div className="field"><label>Reason</label>
+          <div className="field">
+            <label>Reason</label>
             <textarea rows="3" value={f.reason} onChange={set('reason')} />
           </div>
         </div>
