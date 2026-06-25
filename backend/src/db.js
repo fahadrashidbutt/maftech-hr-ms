@@ -61,18 +61,23 @@ CREATE TABLE IF NOT EXISTS employees (
 );
 
 CREATE TABLE IF NOT EXISTS leave_requests (
-  id               INTEGER PRIMARY KEY AUTOINCREMENT,
-  employee_id      INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  leave_type       TEXT NOT NULL CHECK (leave_type IN ('annual','casual','sick','unpaid')),
-  start_date       TEXT NOT NULL,
-  end_date         TEXT NOT NULL,
-  reason           TEXT,
-  status           TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-  decided_by       INTEGER REFERENCES employees(id),
-  decided_at       TEXT,
-  rejection_reason TEXT,
-  paid_status      TEXT CHECK (paid_status IN ('paid','unpaid')),
-  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id         INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  leave_type          TEXT NOT NULL CHECK (leave_type IN ('annual','casual','sick','unpaid')),
+  start_date          TEXT NOT NULL,
+  end_date            TEXT NOT NULL,
+  reason              TEXT,
+  status              TEXT NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','approved','rejected',
+                                        'sent_to_manager','manager_approved','manager_rejected')),
+  decided_by          INTEGER REFERENCES employees(id),
+  decided_at          TEXT,
+  rejection_reason    TEXT,
+  paid_status         TEXT CHECK (paid_status IN ('paid','unpaid')),
+  assigned_manager_id INTEGER REFERENCES users(id),
+  manager_comment     TEXT,
+  hr_comment          TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -155,6 +160,44 @@ try { db.exec('ALTER TABLE employees ADD COLUMN termination_reason TEXT'); } cat
 try { db.exec("UPDATE employees SET date_of_termination = contract_end WHERE contract_end IS NOT NULL AND date_of_termination IS NULL"); } catch {}
 try { db.exec('ALTER TABLE job_openings ADD COLUMN shift TEXT'); } catch {}
 try { db.exec('ALTER TABLE job_openings ADD COLUMN salary REAL'); } catch {}
+
+// Migrate leave_requests: expand status CHECK + add manager-workflow columns.
+try {
+  const schema = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='leave_requests'").get();
+  if (schema && !schema.sql.includes("'sent_to_manager'")) {
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      ALTER TABLE leave_requests RENAME TO _leave_requests_bk;
+      CREATE TABLE leave_requests (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id         INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+        leave_type          TEXT NOT NULL CHECK (leave_type IN ('annual','casual','sick','unpaid')),
+        start_date          TEXT NOT NULL,
+        end_date            TEXT NOT NULL,
+        reason              TEXT,
+        status              TEXT NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending','approved','rejected',
+                                              'sent_to_manager','manager_approved','manager_rejected')),
+        decided_by          INTEGER REFERENCES employees(id),
+        decided_at          TEXT,
+        rejection_reason    TEXT,
+        paid_status         TEXT CHECK (paid_status IN ('paid','unpaid')),
+        assigned_manager_id INTEGER REFERENCES users(id),
+        manager_comment     TEXT,
+        hr_comment          TEXT,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      INSERT INTO leave_requests
+        (id,employee_id,leave_type,start_date,end_date,reason,status,
+         decided_by,decided_at,rejection_reason,paid_status,created_at)
+      SELECT id,employee_id,leave_type,start_date,end_date,reason,status,
+             decided_by,decided_at,rejection_reason,paid_status,created_at
+      FROM _leave_requests_bk;
+      DROP TABLE _leave_requests_bk;
+    `);
+    db.pragma('foreign_keys = ON');
+  }
+} catch(e) { console.warn('Leave workflow migration:', e.message); }
 
 // Migrate candidates: replace 'selected' status with 'hired'.
 try {

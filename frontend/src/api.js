@@ -48,6 +48,9 @@ export const api = {
   approveLeave: (id) => request(`/leave/${id}/approve`, { method: 'POST' }),
   rejectLeave: (id, reason) => request(`/leave/${id}/reject`, { method: 'POST', body: { rejection_reason: reason || null } }),
   editLeaveStatus: (id, status, reason, paidStatus) => request(`/leave/${id}`, { method: 'PATCH', body: { status, rejection_reason: reason || null, paid_status: paidStatus || null } }),
+  sendToManager: (id, managerId, hrComment) => request(`/leave/${id}/send-to-manager`, { method: 'POST', body: { manager_id: managerId, hr_comment: hrComment || null } }),
+  managerReview: (id, decision, comment) => request(`/leave/${id}/manager-review`, { method: 'POST', body: { decision, comment: comment || null } }),
+  leaveManagers: () => request('/leave/meta/managers'),
 
   docTypes: () => request('/documents/types'),
   documents: (empId) => request(`/documents/employee/${empId}`),
