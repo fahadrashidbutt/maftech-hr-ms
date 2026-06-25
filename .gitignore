@@ -1,0 +1,29 @@
+# Node
+node_modules/
+npm-debug.log*
+
+# Build output
+frontend/dist/
+backend/dist/
+
+# SQLite database (local dev data — don't commit)
+*.sqlite
+*.sqlite3
+*.db
+
+# Uploads (user files — don't commit binaries)
+backend/uploads/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.suo
+*.user
