@@ -1,5 +1,5 @@
 // src/pages/Admin.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { Clock, Building2, UserCog } from 'lucide-react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
@@ -7,6 +7,34 @@ import { useAuth } from '../auth.jsx';
 const ROLES = ['super_admin', 'hr', 'manager', 'employee'];
 
 const TAB_ICONS = { shifts: Clock, departments: Building2, users: UserCog };
+
+// Mirrors backend PERMISSIONS — used only to display what each role can do
+const ROLE_PERMS = {
+  super_admin: ['*'],
+  hr: ['employee.read', 'employee.write', 'employee.edit', 'leave.read', 'leave.approve', 'leave.edit', 'document.read', 'document.write', 'recruitment.read', 'recruitment.write', 'dashboard.hr', 'shift.write'],
+  manager: ['employee.read', 'leave.read', 'leave.approve', 'dashboard.hr'],
+  employee: ['employee.read.self', 'leave.read.self', 'leave.submit', 'document.read.self'],
+};
+
+const PERM_LABELS = {
+  '*': 'Full Access',
+  'employee.read': 'View Employees',
+  'employee.write': 'Add Employees',
+  'employee.edit': 'Edit Employees',
+  'employee.read.self': 'Own Profile',
+  'leave.read': 'View All Leave',
+  'leave.read.self': 'Own Leave',
+  'leave.approve': 'Approve Leave',
+  'leave.edit': 'Edit Leave',
+  'leave.submit': 'Submit Leave',
+  'document.read': 'View Documents',
+  'document.read.self': 'Own Documents',
+  'document.write': 'Upload Documents',
+  'recruitment.read': 'View Recruitment',
+  'recruitment.write': 'Manage Recruitment',
+  'dashboard.hr': 'HR Dashboard',
+  'shift.write': 'Manage Shifts',
+};
 
 export default function Admin() {
   const { user } = useAuth();
@@ -245,19 +273,32 @@ function Users() {
             <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead>
             <tbody>
               {displayed.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.email}</td>
-                  <td>{u.full_name || '—'}</td>
-                  <td><span className="tag approved" style={{ textTransform: 'capitalize' }}>{u.role.replace('_', ' ')}</span></td>
-                  <td><span className={`tag ${u.is_active ? 'approved' : 'rejected'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <button className="btn ghost sm" onClick={() => setEditUser(u)}>Edit</button>{' '}
-                    <button className="btn ghost sm" onClick={() => toggleActive(u)}>
-                      {u.is_active ? 'Deactivate' : 'Activate'}
-                    </button>{' '}
-                    <button className="btn no sm" onClick={() => remove(u)}>Delete</button>
-                  </td>
-                </tr>
+                <Fragment key={u.id}>
+                  <tr>
+                    <td>{u.email}</td>
+                    <td>{u.full_name || '—'}</td>
+                    <td><span className="tag approved" style={{ textTransform: 'capitalize' }}>{u.role.replace('_', ' ')}</span></td>
+                    <td><span className={`tag ${u.is_active ? 'approved' : 'rejected'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <button className="btn ghost sm" onClick={() => setEditUser(u)}>Edit</button>{' '}
+                      <button className="btn ghost sm" onClick={() => toggleActive(u)}>
+                        {u.is_active ? 'Deactivate' : 'Activate'}
+                      </button>{' '}
+                      <button className="btn no sm" onClick={() => remove(u)}>Delete</button>
+                    </td>
+                  </tr>
+                  <tr className="perm-row">
+                    <td colSpan="5">
+                      <div className="perm-chips">
+                        {(ROLE_PERMS[u.role] || []).map((p) => (
+                          <span key={p} className={`perm-tag${p === '*' ? ' perm-full' : ''}`}>
+                            {PERM_LABELS[p] || p}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>

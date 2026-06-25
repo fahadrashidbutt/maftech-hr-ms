@@ -113,6 +113,12 @@ tbody tr:hover { background: #f7fafc; }
 .modal .body { padding: 20px 22px; }
 .modal .foot { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 10px; }
 
+/* permission chips (Admin → Users) */
+.perm-row td { padding-top: 2px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.perm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.perm-tag { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 9px; border-radius: 20px; background: var(--teal-050); color: var(--teal-700); white-space: nowrap; }
+.perm-tag.perm-full { background: #f0edf8; color: var(--amber); font-weight: 700; }
+
 /* filter bar */
 .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
 .filter-bar input { padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; min-width: 160px; flex: 1; }
