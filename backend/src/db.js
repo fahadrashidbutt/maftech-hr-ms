@@ -142,7 +142,24 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   detail     TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS leave_quotas (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  leave_type  TEXT NOT NULL CHECK (leave_type IN ('annual','casual','sick','unpaid')),
+  year        INTEGER NOT NULL DEFAULT (CAST(strftime('%Y','now') AS INTEGER)),
+  total_days  INTEGER NOT NULL DEFAULT 0,
+  created_by  INTEGER REFERENCES users(id),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(employee_id, leave_type, year)
+);
 `);
+
+// Seed the company's departments (INSERT OR IGNORE so existing data is untouched).
+[
+  'SEO', 'Shopify', 'WordPress',
+  'Alharam Travels and Tours', 'Social Media', 'Admin',
+].forEach(name => db.prepare('INSERT OR IGNORE INTO departments (name) VALUES (?)').run(name));
 
 // Seed default shifts on first run.
 if (db.prepare('SELECT COUNT(*) AS n FROM shifts').get().n === 0) {

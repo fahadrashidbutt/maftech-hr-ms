@@ -39,6 +39,9 @@ export const api = {
   employee: (id) => request(`/employees/${id}`),
   departments: () => request('/employees/meta/departments'),
   managers: () => request('/employees/meta/managers'),
+  teamManagers: () => request('/employees/meta/team-managers'),
+  teamMembers: (managerEmpId) => request(`/employees/team/${managerEmpId}`),
+  assignManager: (empId, managerId) => request(`/employees/${empId}/assign-manager`, { method: 'PATCH', body: { manager_id: managerId ?? null } }),
   createEmployee: (b) => request('/employees', { method: 'POST', body: b }),
   updateEmployee: (id, b) => request(`/employees/${id}`, { method: 'PUT', body: b }),
   changeEmployeeStatus: (id, status) => request(`/employees/${id}/status`, { method: 'PATCH', body: { employment_status: status } }),
@@ -51,6 +54,13 @@ export const api = {
   sendToManager: (id, managerId, hrComment) => request(`/leave/${id}/send-to-manager`, { method: 'POST', body: { manager_id: managerId, hr_comment: hrComment || null } }),
   managerReview: (id, decision, comment) => request(`/leave/${id}/manager-review`, { method: 'POST', body: { decision, comment: comment || null } }),
   leaveManagers: () => request('/leave/meta/managers'),
+  leaveQuotas: (empId, year) => {
+    const p = [];
+    if (empId) p.push(`employee_id=${empId}`);
+    if (year) p.push(`year=${year}`);
+    return request(`/leave/quotas${p.length ? `?${p.join('&')}` : ''}`);
+  },
+  setLeaveQuota: (empId, type, year, days) => request('/leave/quotas/set', { method: 'POST', body: { employee_id: empId, leave_type: type, year, total_days: days } }),
 
   docTypes: () => request('/documents/types'),
   documents: (empId) => request(`/documents/employee/${empId}`),

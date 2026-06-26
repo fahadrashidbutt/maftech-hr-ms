@@ -15,7 +15,7 @@ const BASE_SELECT = `
   LEFT JOIN employees m   ON m.id = e.manager_id
 `;
 
-// List employees. HR/admin see all; managers see their department; employees see self.
+// List employees. HR/admin see all; managers see their direct reports; employees see self.
 router.get('/', (req, res) => {
   const { role } = req.user;
   const q = (req.query.q || '').trim();
@@ -23,8 +23,9 @@ router.get('/', (req, res) => {
   if (can(role, 'employee.read') && role !== 'manager') {
     rows = db.prepare(`${BASE_SELECT} ORDER BY e.full_name`).all();
   } else if (role === 'manager') {
-    rows = db.prepare(`${BASE_SELECT} WHERE e.department_id = ? ORDER BY e.full_name`)
-      .all(req.employee?.department_id ?? -1);
+    // Only show employees this manager directly manages
+    rows = db.prepare(`${BASE_SELECT} WHERE e.manager_id = ? ORDER BY e.full_name`)
+      .all(req.employee?.id ?? -1);
   } else {
     rows = req.employee ? [db.prepare(`${BASE_SELECT} WHERE e.id = ?`).get(req.employee.id)] : [];
   }
@@ -166,12 +167,55 @@ router.patch('/:id/status', require('employee.edit'), (req, res) => {
   res.json(db.prepare(`${BASE_SELECT} WHERE e.id = ?`).get(req.params.id));
 });
 
+// ── Assign an employee to a manager (team membership) ───────────────────────
+router.patch('/:id/assign-manager', require('employee.edit'), (req, res) => {
+  const existing = db.prepare('SELECT id FROM employees WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Employee not found.' });
+  const { manager_id } = req.body || {};
+  db.prepare('UPDATE employees SET manager_id = ? WHERE id = ?')
+    .run(manager_id ?? null, req.params.id);
+  audit(req.user.id, 'employee.assign', `#${req.params.id} -> mgr#${manager_id ?? 'none'}`);
+  res.json(db.prepare(`${BASE_SELECT} WHERE e.id = ?`).get(req.params.id));
+});
+
 router.get('/meta/departments', (req, res) => {
   res.json(db.prepare('SELECT * FROM departments ORDER BY name').all());
 });
 
+// Returns all employees with manager role + their team size
+router.get('/meta/team-managers', (req, res) => {
+  const rows = db.prepare(`
+    SELECT e.id, e.full_name, e.designation, e.department_id,
+           d.name AS department_name, u.id AS user_id, u.email,
+           COUNT(t.id) AS team_size
+    FROM employees e
+    JOIN users u ON u.id = e.user_id
+    LEFT JOIN departments d ON d.id = e.department_id
+    LEFT JOIN employees t ON t.manager_id = e.id
+    WHERE u.role = 'manager' AND u.is_active = 1
+    GROUP BY e.id
+    ORDER BY e.full_name
+  `).all();
+  res.json(rows);
+});
+
+// Returns all direct reports for a given manager employee id
+router.get('/team/:managerEmpId', (req, res) => {
+  const rows = db.prepare(`${BASE_SELECT} WHERE e.manager_id = ? ORDER BY e.full_name`)
+    .all(req.params.managerEmpId);
+  res.json(rows);
+});
+
+// Returns employees who have user accounts with manager role (for dropdowns)
 router.get('/meta/managers', (req, res) => {
-  res.json(db.prepare('SELECT id, full_name, designation FROM employees ORDER BY full_name').all());
+  res.json(db.prepare(`
+    SELECT e.id, e.full_name, e.designation, d.name AS department_name
+    FROM employees e
+    JOIN users u ON u.id = e.user_id
+    LEFT JOIN departments d ON d.id = e.department_id
+    WHERE u.role = 'manager' AND u.is_active = 1
+    ORDER BY e.full_name
+  `).all());
 });
 
 export default router;

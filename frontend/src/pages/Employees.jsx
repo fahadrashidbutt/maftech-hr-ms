@@ -71,23 +71,29 @@ export default function Employees() {
         ) : (
           <>
             <div className="results-count">{displayed.length} of {rows.length} employee{rows.length !== 1 ? 's' : ''}</div>
-            <table>
-              <thead>
-                <tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Shift</th><th>Status</th></tr>
-              </thead>
-              <tbody>
-                {displayed.map((e) => (
-                  <tr key={e.id} className="row-link" onClick={() => nav(`/employees/${e.id}`)}>
-                    <td>{e.employee_code || '—'}</td>
-                    <td>{e.full_name}</td>
-                    <td>{e.department_name || '—'}</td>
-                    <td>{e.designation || '—'}</td>
-                    <td>{e.shift || '—'}</td>
-                    <td><span className="tag approved">{e.employment_status}</span></td>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code</th><th>Name</th><th>Department</th><th>Designation</th>
+                    <th>Reports To</th><th>Shift</th><th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {displayed.map((e) => (
+                    <tr key={e.id} className="row-link" onClick={() => nav(`/employees/${e.id}`)}>
+                      <td style={{ color: 'var(--muted)', fontSize: 12.5 }}>{e.employee_code || '—'}</td>
+                      <td style={{ fontWeight: 500 }}>{e.full_name}</td>
+                      <td>{e.department_name || '—'}</td>
+                      <td>{e.designation || '—'}</td>
+                      <td style={{ fontSize: 12.5, color: 'var(--muted)' }}>{e.manager_name || '—'}</td>
+                      <td style={{ fontSize: 12.5 }}>{e.shift || '—'}</td>
+                      <td><span className={`tag ${e.employment_status === 'active' ? 'approved' : e.employment_status === 'terminated' || e.employment_status === 'resigned' ? 'rejected' : 'pending'}`}>{e.employment_status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         )}
       </div>

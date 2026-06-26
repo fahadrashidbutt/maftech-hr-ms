@@ -19,6 +19,64 @@ const SELECT = `
   LEFT JOIN employees me ON me.user_id = l.assigned_manager_id
 `;
 
+// ── Leave quotas (allowances) ────────────────────────────────────────────────
+// Subquery to compute used days from approved requests within the quota's year
+const USAGE_SUB = `COALESCE((
+  SELECT CAST(SUM(julianday(l2.end_date) - julianday(l2.start_date) + 1) AS INTEGER)
+  FROM leave_requests l2
+  WHERE l2.employee_id = q.employee_id
+    AND l2.leave_type  = q.leave_type
+    AND l2.status      = 'approved'
+    AND strftime('%Y', l2.start_date) = CAST(q.year AS TEXT)
+), 0) AS used_days`;
+
+router.get('/quotas', (req, res) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const empId = req.query.employee_id ? Number(req.query.employee_id) : null;
+
+  if (req.user.role === 'employee') {
+    if (!req.employee) return res.json([]);
+    return res.json(
+      db.prepare(`SELECT q.*, ${USAGE_SUB} FROM leave_quotas q
+        WHERE q.employee_id = ? AND q.year = ? ORDER BY q.leave_type`)
+        .all(req.employee.id, year)
+    );
+  }
+
+  if (req.user.role !== 'hr' && req.user.role !== 'super_admin')
+    return res.status(403).json({ error: 'HR access required.' });
+
+  let sql = `SELECT q.*, e.full_name AS employee_name, d.name AS department_name, ${USAGE_SUB}
+    FROM leave_quotas q
+    JOIN employees e ON e.id = q.employee_id
+    LEFT JOIN departments d ON d.id = e.department_id
+    WHERE q.year = ?`;
+  const params = [year];
+  if (empId) { sql += ' AND q.employee_id = ?'; params.push(empId); }
+  sql += ' ORDER BY e.full_name, q.leave_type';
+  res.json(db.prepare(sql).all(...params));
+});
+
+router.post('/quotas/set', (req, res) => {
+  if (req.user.role !== 'hr' && req.user.role !== 'super_admin')
+    return res.status(403).json({ error: 'HR access required.' });
+  const { employee_id, leave_type, year, total_days } = req.body || {};
+  if (!employee_id || !leave_type || total_days == null)
+    return res.status(400).json({ error: 'employee_id, leave_type, and total_days are required.' });
+  const TYPES = ['annual', 'casual', 'sick', 'unpaid'];
+  if (!TYPES.includes(leave_type)) return res.status(400).json({ error: 'Invalid leave_type.' });
+  const yr = Number(year) || new Date().getFullYear();
+  db.prepare(`
+    INSERT INTO leave_quotas (employee_id, leave_type, year, total_days, created_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(employee_id, leave_type, year) DO UPDATE SET
+      total_days = excluded.total_days, created_by = excluded.created_by,
+      updated_at = datetime('now')
+  `).run(Number(employee_id), leave_type, yr, Number(total_days), req.user.id);
+  audit(req.user.id, 'leave.quota.set', `emp#${employee_id} ${leave_type} ${yr}: ${total_days}d`);
+  res.json({ ok: true });
+});
+
 // ── List active managers (for HR's send-to-manager dropdown) ─────────────────
 router.get('/meta/managers', (req, res) => {
   const rows = db.prepare(`
@@ -39,9 +97,12 @@ router.get('/', (req, res) => {
   if (role === 'super_admin' || role === 'hr') {
     rows = db.prepare(`${SELECT} ORDER BY l.created_at DESC`).all();
   } else if (role === 'manager') {
-    // managers only see leaves HR has sent to them for review
-    rows = db.prepare(`${SELECT} WHERE l.assigned_manager_id = ? ORDER BY l.created_at DESC`)
-      .all(req.user.id);
+    // Managers see ALL their team's leave requests + any HR sent to them for review
+    const mEmpId = req.employee?.id ?? -1;
+    rows = db.prepare(`${SELECT}
+      WHERE (e.manager_id = ? OR l.assigned_manager_id = ?)
+      ORDER BY l.created_at DESC`)
+      .all(mEmpId, req.user.id);
   } else {
     rows = db.prepare(`${SELECT} WHERE l.employee_id = ? ORDER BY l.created_at DESC`)
       .all(req.employee?.id ?? -1);
